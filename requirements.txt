@@ -1,3 +1,4 @@
-playwright
+flask
 psycopg2-binary
 playwright
+email-validator
