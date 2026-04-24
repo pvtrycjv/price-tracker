@@ -1,0 +1,30 @@
+name: Run Price Tracker
+
+on:
+  schedule:
+    - cron: '0 8 * * *'  # every day at 08:00 UTC
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Install Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          playwright install
+
+      - name: Run scraper
+        env:
+          EMAIL: ${{ secrets.EMAIL }}
+          APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
+        run: python scraper.py
