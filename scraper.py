@@ -15,11 +15,13 @@ APP_PASSWORD = os.environ.get("APP_PASSWORD")
 
 
 # ---------------- DB CONNECTION ---------------- #
-def get_connection():
-    if not DATABASE_URL:
-        raise Exception("DATABASE_URL not set")
-    return psycopg2.connect(DATABASE_URL)
 
+def get_connection():
+    url = DATABASE_URL.replace("postgresql://", "postgresql://")
+    return psycopg2.connect(
+        url,
+        sslmode="require"
+    )
 
 # ---------------- HELPERS ---------------- #
 def clean_url(url):
