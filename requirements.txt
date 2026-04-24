@@ -1,4 +1,4 @@
 flask
 psycopg2-binary
-playwright
+playwright==1.40.0
 email-validator
