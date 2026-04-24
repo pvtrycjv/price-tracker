@@ -1,0 +1,51 @@
+name: Add Product (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Product URL"
+        required: true
+
+jobs:
+  add:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: pip install psycopg2-binary
+
+      - name: Add product to DB
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          python - << 'EOF'
+import os
+import psycopg2
+from urllib.parse import urlparse
+
+url = "${{ github.event.inputs.url }}"
+product_id = url.rstrip("/").split("/")[-1]
+
+conn = psycopg2.connect(os.environ["DATABASE_URL"])
+cur = conn.cursor()
+
+cur.execute("""
+INSERT INTO products (product_id, url, last_price)
+VALUES (%s, %s, NULL)
+ON CONFLICT (product_id) DO NOTHING
+""", (product_id, url))
+
+conn.commit()
+conn.close()
+
+print("Added:", product_id)
+EOF
