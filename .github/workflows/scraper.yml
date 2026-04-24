@@ -27,4 +27,5 @@ jobs:
         env:
           EMAIL: ${{ secrets.EMAIL }}
           APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python scraper.py
