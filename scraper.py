@@ -1,9 +1,19 @@
 import sqlite3
 import time
 import smtplib
+import shutil
+import sys
 import os
+import psycopg2
+from urllib.parse import urlparse
 from email.message import EmailMessage
 from playwright.sync_api import sync_playwright
+
+
+DATABASE_URL = os.environ.get("DATABASE_URL")
+
+def get_connection():
+    return psycopg2.connect(DATABASE_URL)
 
 # ---------------- MAIL ---------------- #
 EMAIL = os.environ.get("EMAIL")
@@ -36,7 +46,7 @@ Link: {url}
 DB_NAME = "prices.db"
 
 def init_db():
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -52,7 +62,7 @@ def init_db():
     conn.close()
 
 def get_saved_price(product_id):
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute(
@@ -65,7 +75,7 @@ def get_saved_price(product_id):
     return row[0] if row else None
 
 def update_price(product_id, url, price):
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -79,7 +89,7 @@ def update_price(product_id, url, price):
     conn.close()
 
 def get_all_products():
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute("SELECT product_id, url FROM products")
