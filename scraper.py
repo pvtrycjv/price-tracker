@@ -127,30 +127,42 @@ def check_price(product_id, url):
             print("\n--- Checking product ---")
             print("URL:", url)
 
-            page.goto(url, wait_until="domcontentloaded")
+            page.goto(url)
 
-            # wait for dynamic content
-            page.wait_for_timeout(3000)
+            # ✅ MUST be indented inside function
+            page.wait_for_selector(".price-format__whole", timeout=10000)
+
+            page.wait_for_function("""
+                () => {
+                    const el = document.querySelector('.price-format__whole');
+                    return el && el.innerText.trim().length > 0;
+                }
+            """, timeout=10000)
 
             # -------- PRICE LOGIC -------- #
             price = None
 
-            # Main Ceneo format
             whole = page.query_selector(".price-format__whole")
             fraction = page.query_selector(".price-format__fraction")
 
             if whole:
                 w = whole.inner_text().strip()
                 f = fraction.inner_text().strip() if fraction else "00"
-                price = float(f"{w}.{f}")
+
+                # ✅ safety check (important!)
+                if w and w.replace(".", "").isdigit():
+                    price = float(f"{w}.{f}")
+                else:
+                    print("Invalid price format:", repr(w))
 
             # Fallback
             if price is None:
                 alt = page.query_selector(".price")
                 if alt:
                     text = alt.inner_text().strip()
-                    text = text.replace("zł", "").replace(",", ".").replace(" ", "")
-                    price = float(text)
+                    if text:
+                        text = text.replace("zł", "").replace(",", ".").replace(" ", "")
+                        price = float(text)
 
             if price is None:
                 print("Price not found")
@@ -159,7 +171,7 @@ def check_price(product_id, url):
 
             print(f"{product_id} -> {price} PLN")
 
-            # -------- DATABASE LOGIC -------- #
+            # -------- DATABASE -------- #
             old_price = get_saved_price(product_id)
 
             if old_price is None:
@@ -175,6 +187,7 @@ def check_price(product_id, url):
 
     except Exception as e:
         print(f"❌ ERROR for {product_id}: {e}")
+
 
 
 # ---------------- FLASK ROUTES ---------------- #
