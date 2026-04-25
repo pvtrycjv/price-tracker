@@ -213,4 +213,19 @@ def add_from_url():
 # ---------------- MAIN ---------------- #
 if __name__ == "__main__":
     init_db()
-    app.run(host="0.0.0.0", port=10000)
+
+    # If running in GitHub Actions → run scraper
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        print("Running in GitHub Actions...")
+
+        products = get_all_products()
+        if not products:
+            print("No products in DB.")
+        else:
+            for product_id, url in products:
+                check_price(product_id, url)
+                time.sleep(2)
+
+    # Otherwise → run Flask (Render)
+    else:
+        app.run(host="0.0.0.0", port=10000)
