@@ -245,12 +245,28 @@ if __name__ == "__main__":
         print("Running in GitHub Actions...")
 
         products = get_all_products()
+
         if not products:
             print("No products in DB.")
         else:
-            for product_id, url in products:
-                check_price(product_id, url)
-                time.sleep(2)
+            from playwright.sync_api import sync_playwright
+
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+
+                context = browser.new_context(
+                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+                    locale="pl-PL"
+                )
+
+                page = context.new_page()
+                page.set_default_timeout(30000)
+
+                for product_id, url in products:
+                    check_price(product_id, url, page)
+                    time.sleep(3)
+
+                browser.close()
 
     # Otherwise → run Flask (Render)
     else:
