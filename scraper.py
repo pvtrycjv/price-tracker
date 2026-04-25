@@ -122,31 +122,44 @@ def check_price(product_id, url):
             )
             page = context.new_page()
 
-            # Hard timeout for EVERYTHING
             page.set_default_timeout(30000)
 
             print("\n--- Checking product ---")
             print("URL:", url)
 
-            page.goto(url)
+            page.goto(url, wait_until="domcontentloaded")
 
-            price_el = page.query_selector("span.price")
-            if not price_el:
+            # wait for dynamic content
+            page.wait_for_timeout(3000)
+
+            # -------- PRICE LOGIC -------- #
+            price = None
+
+            # Main Ceneo format
+            whole = page.query_selector(".price-format__whole")
+            fraction = page.query_selector(".price-format__fraction")
+
+            if whole:
+                w = whole.inner_text().strip()
+                f = fraction.inner_text().strip() if fraction else "00"
+                price = float(f"{w}.{f}")
+
+            # Fallback
+            if price is None:
+                alt = page.query_selector(".price")
+                if alt:
+                    text = alt.inner_text().strip()
+                    text = text.replace("zł", "").replace(",", ".").replace(" ", "")
+                    price = float(text)
+
+            if price is None:
                 print("Price not found")
                 browser.close()
                 return
 
-            price_text = price_el.inner_text().strip()
-            price_text = (
-                price_text.replace("\xa0", "")
-                           .replace(" ", "")
-                           .replace("PLN", "")
-                           .replace(",", ".")
-            )
-
-            price = float(price_text)
             print(f"{product_id} -> {price} PLN")
 
+            # -------- DATABASE LOGIC -------- #
             old_price = get_saved_price(product_id)
 
             if old_price is None:
@@ -162,7 +175,6 @@ def check_price(product_id, url):
 
     except Exception as e:
         print(f"❌ ERROR for {product_id}: {e}")
-
 
 
 # ---------------- FLASK ROUTES ---------------- #
