@@ -112,83 +112,72 @@ def get_all_products():
 
 # ---------------- SCRAPER ---------------- #
 
-def check_price(product_id, url):
+def check_price(product_id, url, page):
     try:
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            context = browser.new_context(
-                user_agent="Mozilla/5.0",
-                locale="pl-PL"
-            )
-            page = context.new_page()
+        print("\n--- Checking product ---")
+        print("URL:", url)
 
-            page.set_default_timeout(30000)
+        page.goto(
+            url,
+            timeout=30000,
+            wait_until="domcontentloaded"
+        )
 
-            print("\n--- Checking product ---")
-            print("URL:", url)
+        # Small delay helps JS render
+        page.wait_for_timeout(2000)
 
-            page.goto(url)
+        # Wait for price (more flexible)
+        page.wait_for_selector(
+            ".price-format__whole, .price",
+            timeout=15000
+        )
 
-            # ✅ MUST be indented inside function
-            page.wait_for_selector(".price-format__whole", timeout=10000)
+        # -------- PRICE LOGIC -------- #
+        price = None
 
-            page.wait_for_function("""
-                () => {
-                    const el = document.querySelector('.price-format__whole');
-                    return el && el.innerText.trim().length > 0;
-                }
-            """, timeout=10000)
+        whole = page.query_selector(".price-format__whole")
+        fraction = page.query_selector(".price-format__fraction")
 
-            # -------- PRICE LOGIC -------- #
-            price = None
+        if whole:
+            w = whole.inner_text().strip()
+            f = fraction.inner_text().strip() if fraction else "00"
 
-            whole = page.query_selector(".price-format__whole")
-            fraction = page.query_selector(".price-format__fraction")
+            if w and w.replace(".", "").isdigit():
+                price = float(f"{w}.{f}")
+            else:
+                print("Invalid price format:", repr(w))
 
-            if whole:
-                w = whole.inner_text().strip()
-                f = fraction.inner_text().strip() if fraction else "00"
+        # Fallback
+        if price is None:
+            alt = page.query_selector(".price")
+            if alt:
+                text = alt.inner_text().strip()
+                if text:
+                    text = text.replace("zł", "").replace(",", ".").replace(" ", "")
+                    price = float(text)
 
-                # ✅ safety check (important!)
-                if w and w.replace(".", "").isdigit():
-                    price = float(f"{w}.{f}")
-                else:
-                    print("Invalid price format:", repr(w))
+        if price is None:
+            print("❌ Price not found")
+            return
 
-            # Fallback
-            if price is None:
-                alt = page.query_selector(".price")
-                if alt:
-                    text = alt.inner_text().strip()
-                    if text:
-                        text = text.replace("zł", "").replace(",", ".").replace(" ", "")
-                        price = float(text)
+        print(f"{product_id} -> {price} PLN")
 
-            if price is None:
-                print("Price not found")
-                browser.close()
-                return
+        # -------- DATABASE -------- #
+        old_price = get_saved_price(product_id)
 
-            print(f"{product_id} -> {price} PLN")
+        if old_price is None:
+            print("First run, saving price.")
 
-            # -------- DATABASE -------- #
-            old_price = get_saved_price(product_id)
+        elif price < old_price * 0.99:
+            print("🚨 PRICE DROPPED!")
+            send_email(product_id, old_price, price, url)
 
-            if old_price is None:
-                print("First run, saving price.")
-
-            elif price < old_price * 0.99:
-                print("🚨 PRICE DROPPED!")
-                send_email(product_id, old_price, price, url)
-
-            update_price(product_id, url, price)
-
-            browser.close()
+        update_price(product_id, url, price)
 
     except Exception as e:
         print(f"❌ ERROR for {product_id}: {e}")
-
-
+           
+ 
 
 # ---------------- FLASK ROUTES ---------------- #
 @app.route("/")
@@ -203,9 +192,21 @@ def run_scraper():
     if not products:
         return "No products in database."
 
-    for product_id, url in products:
-        check_price(product_id, url)
-        time.sleep(2)
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+
+        context = browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+            locale="pl-PL"
+        )
+
+        page = context.new_page()
+
+        for product_id, url in products:
+            check_price(product_id, url, page)
+            time.sleep(3)  # important: slow down
+
+        browser.close()
 
     return "Scraper finished."
 
