@@ -17,11 +17,7 @@ APP_PASSWORD = os.environ.get("APP_PASSWORD")
 # ---------------- DB CONNECTION ---------------- #
 
 def get_connection():
-    url = DATABASE_URL.replace("postgresql://", "postgresql://")
-    return psycopg2.connect(
-        url,
-        sslmode="require"
-    )
+    return psycopg2.connect(DATABASE_URL, sslmode="require")
 
 # ---------------- HELPERS ---------------- #
 def clean_url(url):
@@ -115,24 +111,29 @@ def get_all_products():
 
 
 # ---------------- SCRAPER ---------------- #
-def check_price(product_id, url):
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        context = browser.new_context(
-            user_agent="Mozilla/5.0",
-            locale="pl-PL"
-        )
-        page = context.new_page()
 
-        try:
-            page.goto(url, wait_until="networkidle", timeout=30000)
+def check_price(product_id, url):
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            context = browser.new_context(
+                user_agent="Mozilla/5.0",
+                locale="pl-PL"
+            )
+            page = context.new_page()
+
+            # Hard timeout for EVERYTHING
+            page.set_default_timeout(30000)
 
             print("\n--- Checking product ---")
             print("URL:", url)
 
+            page.goto(url)
+
             price_el = page.query_selector("span.price")
             if not price_el:
                 print("Price not found")
+                browser.close()
                 return
 
             price_text = price_el.inner_text().strip()
@@ -157,8 +158,11 @@ def check_price(product_id, url):
 
             update_price(product_id, url, price)
 
-        finally:
             browser.close()
+
+    except Exception as e:
+        print(f"❌ ERROR for {product_id}: {e}")
+
 
 
 # ---------------- FLASK ROUTES ---------------- #
