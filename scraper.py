@@ -29,18 +29,18 @@ def extract_product_id(url):
 
 
 # ---------------- EMAIL ---------------- #
-def send_email(product_id, old_price, new_price, url):
+def send_email(product_name, old_price, new_price, url):
     msg = EmailMessage()
-    msg["Subject"] = "🚨 Price Dropped!"
+    msg["Subject"] = f"🌸 Price Dropped: {product_name}"
     msg["From"] = EMAIL
     msg["To"] = EMAIL
 
     msg.set_content(f"""
 Price dropped!
 
-Product ID: {product_id}
-Old Price: {old_price}
-New Price: {new_price}
+Product: {product_name}
+Old Price: {old_price} PLN
+New Price: {new_price} PLN
 
 Link: {url}
 """)
@@ -50,7 +50,6 @@ Link: {url}
         server.send_message(msg)
 
     print("📩 Email sent!")
-
 
 # ---------------- DATABASE ---------------- #
 def init_db():
@@ -126,6 +125,20 @@ def check_price(product_id, url, page):
 
         # Small delay helps JS render
         page.wait_for_timeout(3000)
+
+        # -------- PRODUCT NAME -------- #
+        name = "Unknown product"
+
+        try:
+            page.wait_for_selector("h1", timeout=5000)
+            title_el = page.query_selector("h1")
+
+            if title_el:
+                name = title_el.inner_text().strip()
+        except:
+            print("Could not get product name")
+
+        print("NAME:", name)
 
         # -------- PRICE LOGIC -------- #
         price = None
