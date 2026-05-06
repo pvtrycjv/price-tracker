@@ -110,6 +110,7 @@ def get_all_products():
     return rows
 
 
+
 # ---------------- SCRAPER ---------------- #
 
 def check_price(product_id, url, page):
@@ -124,17 +125,12 @@ def check_price(product_id, url, page):
         )
 
         # Small delay helps JS render
-        page.wait_for_timeout(2000)
-
-        # Wait for price (more flexible)
-        page.wait_for_selector(
-            ".price-format__whole, .price",
-            timeout=15000
-        )
+        page.wait_for_timeout(3000)
 
         # -------- PRICE LOGIC -------- #
         price = None
 
+        # -------- FORMAT 1 (Ceneo standard) -------- #
         whole = page.query_selector(".price-format__whole")
         fraction = page.query_selector(".price-format__fraction")
 
@@ -145,22 +141,53 @@ def check_price(product_id, url, page):
             if w and w.replace(".", "").isdigit():
                 price = float(f"{w}.{f}")
             else:
-                print("Invalid price format:", repr(w))
+                print("Invalid price format (format1):", repr(w))
 
-        # Fallback
+        # -------- FORMAT 2 (value + penny) -------- #
+        if price is None:
+            value = page.query_selector(".value")
+            penny = page.query_selector(".penny")
+
+            if value:
+                v = value.inner_text().strip()
+                p = penny.inner_text().replace(",", "").strip() if penny else "00"
+
+                if v.isdigit():
+                    price = float(f"{v}.{p}")
+                else:
+                    print("Invalid price format (format2):", repr(v))
+
+        # -------- FORMAT 3 (.price text) -------- #
         if price is None:
             alt = page.query_selector(".price")
             if alt:
                 text = alt.inner_text().strip()
                 if text:
                     text = text.replace("zł", "").replace(",", ".").replace(" ", "")
-                    price = float(text)
+                    try:
+                        price = float(text)
+                    except:
+                        print("Invalid price format (format3):", repr(text))
 
+        # -------- FORMAT 4 (regex fallback ANYWHERE) -------- #
+        if price is None:
+            import re
+            body_text = page.inner_text("body")
+
+            match = re.search(r"(\d+[.,]\d+)\s*zł", body_text)
+            if match:
+                price = float(match.group(1).replace(",", "."))
+                print("Fallback regex used")
+
+        # -------- FINAL CHECK -------- #
         if price is None:
             print("❌ Price not found")
             return
 
         print(f"{product_id} -> {price} PLN")
+
+    except Exception as e:
+        print(f"❌ ERROR for {product_id}: {e}")
 
         # -------- DATABASE -------- #
         old_price = get_saved_price(product_id)
