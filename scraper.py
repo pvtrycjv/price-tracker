@@ -112,6 +112,7 @@ def get_all_products():
 
 # ---------------- SCRAPER ---------------- #
 
+
 def check_price(product_id, url, page):
     try:
         print("\n--- Checking product ---")
@@ -135,15 +136,16 @@ def check_price(product_id, url, page):
 
             if title_el:
                 name = title_el.inner_text().strip()
-        except:
-            print("Could not get product name")
+
+        except Exception as e:
+            print("Could not get product name", e)
 
         print("NAME:", name)
 
         # -------- PRICE LOGIC -------- #
         price = None
 
-        # -------- FORMAT 1 (Ceneo standard) -------- #
+        # -------- FORMAT 1 -------- #
         whole = page.query_selector(".price-format__whole")
         fraction = page.query_selector(".price-format__fraction")
 
@@ -153,10 +155,8 @@ def check_price(product_id, url, page):
 
             if w and w.replace(".", "").isdigit():
                 price = float(f"{w}.{f}")
-            else:
-                print("Invalid price format (format1):", repr(w))
 
-        # -------- FORMAT 2 (value + penny) -------- #
+        # -------- FORMAT 2 -------- #
         if price is None:
             value = page.query_selector(".value")
             penny = page.query_selector(".penny")
@@ -167,27 +167,35 @@ def check_price(product_id, url, page):
 
                 if v.isdigit():
                     price = float(f"{v}.{p}")
-                else:
-                    print("Invalid price format (format2):", repr(v))
 
-        # -------- FORMAT 3 (.price text) -------- #
+        # -------- FORMAT 3 -------- #
         if price is None:
             alt = page.query_selector(".price")
+
             if alt:
                 text = alt.inner_text().strip()
+
                 if text:
-                    text = text.replace("zł", "").replace(",", ".").replace(" ", "")
+                    text = (
+                        text.replace("zł", "")
+                            .replace(",", ".")
+                            .replace(" ", "")
+                    )
+
                     try:
                         price = float(text)
-                    except:
-                        print("Invalid price format (format3):", repr(text))
 
-        # -------- FORMAT 4 (regex fallback ANYWHERE) -------- #
+                    except:
+                        print("Invalid format3")
+
+        # -------- FORMAT 4 -------- #
         if price is None:
             import re
+
             body_text = page.inner_text("body")
 
             match = re.search(r"(\d+[.,]\d+)\s*zł", body_text)
+
             if match:
                 price = float(match.group(1).replace(",", "."))
                 print("Fallback regex used")
@@ -199,9 +207,6 @@ def check_price(product_id, url, page):
 
         print(f"{product_id} -> {price} PLN")
 
-    except Exception as e:
-        print(f"❌ ERROR for {product_id}: {e}")
-
         # -------- DATABASE -------- #
         old_price = get_saved_price(product_id)
 
@@ -210,13 +215,13 @@ def check_price(product_id, url, page):
 
         elif price < old_price * 0.99:
             print("🚨 PRICE DROPPED!")
-            send_email(product_id, old_price, price, url)
+            send_email(name, old_price, price, url)
 
         update_price(product_id, url, price)
 
     except Exception as e:
         print(f"❌ ERROR for {product_id}: {e}")
-           
+
  
 
 # ---------------- FLASK ROUTES ---------------- #
