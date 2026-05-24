@@ -122,7 +122,6 @@ def check_price(product_id, url, page):
             wait_until="domcontentloaded"
         )
 
-        # Small delay helps JS render
         page.wait_for_timeout(3000)
 
         # =====================================================
@@ -133,7 +132,6 @@ def check_price(product_id, url, page):
 
         try:
             page.wait_for_selector("h1", timeout=5000)
-
             title_el = page.query_selector("h1")
 
             if title_el:
@@ -151,21 +149,17 @@ def check_price(product_id, url, page):
         price = None
 
         # =====================================================
-        # CENEO SPECIAL LOGIC
-        # Lowest product + delivery price
+        # CENEO (ONLY OFFERS - NO PAGE SCANNING)
         # =====================================================
 
         if "ceneo.pl" in url:
 
             import re
 
-            # Extra wait for offers
             page.wait_for_timeout(5000)
 
             offers = page.query_selector_all(
-                ".product-offers .offer-row, "
-                ".product-offers tr, "
-                "[data-offerid]"
+                ".product-offers tr, [data-offerid]"
             )
 
             print(f"Found offers: {len(offers)}")
@@ -177,8 +171,7 @@ def check_price(product_id, url, page):
 
                     text = offer.inner_text()
 
-                    # -------- PRODUCT PRICE -------- #
-
+                    # -------- PRICE -------- #
                     price_match = re.search(
                         r"(\d+[.,]\d+)\s*zł",
                         text
@@ -188,12 +181,10 @@ def check_price(product_id, url, page):
                         continue
 
                     product_price = float(
-                        price_match.group(1)
-                        .replace(",", ".")
+                        price_match.group(1).replace(",", ".")
                     )
 
                     # -------- DELIVERY -------- #
-
                     delivery_price = 0
 
                     delivery_match = re.search(
@@ -204,17 +195,12 @@ def check_price(product_id, url, page):
 
                     if delivery_match:
                         delivery_price = float(
-                            delivery_match.group(1)
-                            .replace(",", ".")
+                            delivery_match.group(1).replace(",", ".")
                         )
 
                     total_price = product_price + delivery_price
 
-                    print(
-                        f"Offer: {product_price} + "
-                        f"delivery {delivery_price} = "
-                        f"{total_price}"
-                    )
+                    print(f"Offer total: {total_price}")
 
                     if (
                         lowest_price is None
@@ -227,99 +213,56 @@ def check_price(product_id, url, page):
 
             if lowest_price is not None:
                 price = lowest_price
-                print("Lowest Ceneo total:", price)
-
+                print(f"Lowest Ceneo total: {price}")
             else:
-                print("No valid Ceneo offers found")
+                print("❌ No valid Ceneo offers found")
 
         # =====================================================
-        # NORMAL STORE LOGIC
+        # NORMAL STORES
         # =====================================================
 
         else:
 
             # -------- FORMAT 1 -------- #
-
             whole = page.query_selector(".price-format__whole")
             fraction = page.query_selector(".price-format__fraction")
 
             if whole:
-
                 w = whole.inner_text().strip()
-                f = (
-                    fraction.inner_text().strip()
-                    if fraction else "00"
-                )
+                f = fraction.inner_text().strip() if fraction else "00"
 
                 if w and w.replace(".", "").isdigit():
                     price = float(f"{w}.{f}")
 
             # -------- FORMAT 2 -------- #
-
             if price is None:
-
                 value = page.query_selector(".value")
                 penny = page.query_selector(".penny")
 
                 if value:
-
                     v = value.inner_text().strip()
-
-                    p = (
-                        penny.inner_text()
-                        .replace(",", "")
-                        .strip()
-                        if penny else "00"
-                    )
+                    p = penny.inner_text().replace(",", "").strip() if penny else "00"
 
                     if v.isdigit():
                         price = float(f"{v}.{p}")
 
             # -------- FORMAT 3 -------- #
-
             if price is None:
-
                 alt = page.query_selector(".price")
 
                 if alt:
-
                     text = alt.inner_text().strip()
 
-                    if text:
-
-                        text = (
-                            text.replace("zł", "")
-                                .replace(",", ".")
-                                .replace(" ", "")
-                        )
-
-                        try:
-                            price = float(text)
-
-                        except:
-                            print("Invalid format3")
-
-            # -------- FORMAT 4 -------- #
-
-            if price is None:
-
-                import re
-
-                body_text = page.inner_text("body")
-
-                match = re.search(
-                    r"(\d+[.,]\d+)\s*zł",
-                    body_text
-                )
-
-                if match:
-
-                    price = float(
-                        match.group(1)
-                        .replace(",", ".")
+                    text = (
+                        text.replace("zł", "")
+                            .replace(",", ".")
+                            .replace(" ", "")
                     )
 
-                    print("Fallback regex used")
+                    try:
+                        price = float(text)
+                    except:
+                        print("Invalid format3")
 
         # =====================================================
         # FINAL CHECK
@@ -338,19 +281,11 @@ def check_price(product_id, url, page):
         old_price = get_saved_price(product_id)
 
         if old_price is None:
-
             print("First run, saving price.")
 
         elif price < old_price * 0.99:
-
             print("🚨 PRICE DROPPED!")
-
-            send_email(
-                name,
-                old_price,
-                price,
-                url
-            )
+            send_email(name, old_price, price, url)
 
         update_price(product_id, url, price)
 
