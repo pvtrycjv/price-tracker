@@ -112,6 +112,8 @@ def get_all_products():
 # ---------------- SCRAPER ---------------- #
 
 
+# ---------------- SCRAPER ---------------- #
+
 def check_price(product_id, url, page):
     try:
         print("\n--- Checking product ---")
@@ -125,10 +127,7 @@ def check_price(product_id, url, page):
 
         page.wait_for_timeout(3000)
 
-        # =====================================================
-        # PRODUCT NAME
-        # =====================================================
-
+        # -------- PRODUCT NAME -------- #
         name = "Unknown product"
 
         try:
@@ -138,18 +137,18 @@ def check_price(product_id, url, page):
             if title_el:
                 name = title_el.inner_text().strip()
 
-        except:
-            print("Could not get product name")
+        except Exception as e:
+            print("Could not get product name:", e)
 
         print("NAME:", name)
 
         # =====================================================
-        # PRICE LOGIC (SIMPLE WORKING VERSION)
+        # PRICE LOGIC (RESTORED SIMPLE VERSION)
         # =====================================================
 
         price = None
 
-        # -------- FORMAT 1 -------- #
+        # -------- FORMAT 1 (CENEO SIMPLE) -------- #
         whole = page.query_selector(".price-format__whole")
         fraction = page.query_selector(".price-format__fraction")
 
@@ -191,6 +190,19 @@ def check_price(product_id, url, page):
                     except:
                         print("Invalid format3")
 
+        # -------- FORMAT 4 (fallback) -------- #
+        if price is None:
+            import re
+
+            body_text = page.inner_text("body")
+
+            match = re.search(r"(\d+[.,]\d+)\s*zł", body_text)
+
+            if match:
+                price = float(match.group(1).replace(",", "."))
+
+                print("Fallback regex used")
+
         # =====================================================
         # FINAL CHECK
         # =====================================================
@@ -218,6 +230,7 @@ def check_price(product_id, url, page):
 
     except Exception as e:
         print(f"❌ ERROR for {product_id}: {e}")
+        
  
 
 # ---------------- FLASK ROUTES ---------------- #
