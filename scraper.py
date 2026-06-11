@@ -227,11 +227,60 @@ def check_price(product_id, url, page):
             send_email(name, old_price, price, url)
 
         update_price(product_id, url, price)
+        save_price_history(product_id, price)
 
     except Exception as e:
         print(f"❌ ERROR for {product_id}: {e}")
         
  
+def save_price_history(product_id, price):
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        INSERT INTO price_history (product_id, price)
+        VALUES (%s, %s)
+    """, (product_id, price))
+
+    conn.commit()
+    conn.close()
+
+
+def get_price_stats(product_id):
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT
+            MIN(price),
+            MAX(price),
+            AVG(price)
+        FROM price_history
+        WHERE product_id = %s
+    """, (product_id,))
+
+    stats = cursor.fetchone()
+
+    conn.close()
+
+    return {
+        "lowest": stats[0],
+        "highest": stats[1],
+        "average": round(stats[2], 2) if stats[2] else None
+    }
+
+
+def cleanup_old_history():
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        DELETE FROM price_history
+        WHERE checked_at < NOW() - INTERVAL '60 days'
+    """)
+
+    conn.commit()
+    conn.close()
 
 # ---------------- FLASK ROUTES ---------------- #
 @app.route("/")
@@ -293,6 +342,7 @@ def add_from_url():
 # ---------------- MAIN ---------------- #
 if __name__ == "__main__":
     init_db()
+    cleanup_old_history()
 
     # If running in GitHub Actions → run scraper
     if os.environ.get("GITHUB_ACTIONS") == "true":
