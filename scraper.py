@@ -238,9 +238,20 @@ def save_price_history(product_id, price):
     cursor = conn.cursor()
 
     cursor.execute("""
-        INSERT INTO price_history (product_id, price)
-        VALUES (%s, %s)
-    """, (product_id, price))
+        SELECT price
+        FROM price_history
+        WHERE product_id = %s
+        ORDER BY checked_at DESC
+        LIMIT 1
+    """, (product_id,))
+
+    last = cursor.fetchone()
+
+    if last is None or last[0] != price:
+        cursor.execute("""
+            INSERT INTO price_history (product_id, price)
+            VALUES (%s, %s)
+        """, (product_id, price))
 
     conn.commit()
     conn.close()
