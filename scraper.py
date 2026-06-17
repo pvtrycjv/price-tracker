@@ -2,7 +2,7 @@ import time
 import smtplib
 import os
 import psycopg2
-from flask import Flask, request
+from flask import Flask, request, redirect
 from email.message import EmailMessage
 from playwright.sync_api import sync_playwright
 
@@ -29,7 +29,35 @@ def extract_product_id(url):
 
 
 # ---------------- EMAIL ---------------- #
+ 
+ 
 def send_email(product_name, old_price, new_price, url):
+    from urllib.parse import quote
+
+    delete_url = (
+        "https://price-tracker-rqi7.onrender.com/delete?url="
+        + quote(url, safe="")
+    )
+
+    # -------- STATS -------- #
+    stats = get_price_stats(extract_product_id(url))
+
+    if stats and stats["min"] is not None:
+        stats_text = (
+            f"Min: {stats['min']} PLN\n"
+            f"Max: {stats['max']} PLN\n"
+            f"Avg: {stats['avg']} PLN"
+        )
+    else:
+        stats_text = "No history yet"
+
+    # -------- ALL PRODUCTS -------- #
+    products = get_all_tracked_products()
+
+    product_summary = "\n".join(
+        [f"- {purl} → {price} PLN" for purl, price in products]
+    )
+
     msg = EmailMessage()
     msg["Subject"] = f"🌸 Price Dropped: {product_name}"
     msg["From"] = EMAIL
@@ -42,7 +70,17 @@ Product: {product_name}
 Old Price: {old_price} PLN
 New Price: {new_price} PLN
 
-Link: {url}
+--- Stats ---
+{stats_text}
+
+--- All tracked products ---
+{product_summary}
+
+Link:
+{url}
+
+Stop tracking:
+{delete_url}
 """)
 
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
@@ -50,6 +88,7 @@ Link: {url}
         server.send_message(msg)
 
     print("📩 Email sent!")
+
 
 # ---------------- DATABASE ---------------- #
 def init_db():
@@ -62,6 +101,16 @@ def init_db():
         product_id TEXT UNIQUE,
         url TEXT,
         last_price FLOAT
+    )
+    """)
+
+    
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS price_history (
+        id SERIAL PRIMARY KEY,
+        product_id TEXT,
+        price FLOAT,
+        checked_at TIMESTAMP DEFAULT NOW()
     )
     """)
 
@@ -108,8 +157,15 @@ def get_all_products():
     conn.close()
     return rows
 
+def get_all_tracked_products():
+    conn = get_connection()
+    cursor = conn.cursor()
 
-# ---------------- SCRAPER ---------------- #
+    cursor.execute("SELECT url, last_price FROM products")
+    rows = cursor.fetchall()
+
+    conn.close()
+    return rows
 
 
 # ---------------- SCRAPER ---------------- #
@@ -247,7 +303,8 @@ def save_price_history(product_id, price):
 
     last = cursor.fetchone()
 
-    if last is None or last[0] != price:
+    # only save if changed
+    if last is None or abs(last[0] - price) > 0.01:
         cursor.execute("""
             INSERT INTO price_history (product_id, price)
             VALUES (%s, %s)
@@ -271,16 +328,14 @@ def get_price_stats(product_id):
     """, (product_id,))
 
     stats = cursor.fetchone()
-
     conn.close()
 
     return {
-        "lowest": stats[0],
-        "highest": stats[1],
-        "average": round(stats[2], 2) if stats[2] else None
+        "min": stats[0],
+        "max": stats[1],
+        "avg": round(stats[2], 2) if stats[2] else None
     }
-
-
+    
 def cleanup_old_history():
     conn = get_connection()
     cursor = conn.cursor()
@@ -364,6 +419,29 @@ def add_from_url():
     conn.close()
 
     return f"Added: {product_id}"
+
+
+@app.route("/delete")
+def delete_product():
+    url = request.args.get("url")
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "DELETE FROM products WHERE url = %s",
+        (url,)
+    )
+
+    cursor.execute(
+        "DELETE FROM price_history WHERE product_id = %s",
+        (extract_product_id(url),)
+    )
+
+    conn.commit()
+    conn.close()
+
+    return redirect("/")
 
 
 # ---------------- MAIN ---------------- #
