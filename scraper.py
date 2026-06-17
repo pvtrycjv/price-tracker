@@ -296,7 +296,23 @@ def cleanup_old_history():
 # ---------------- FLASK ROUTES ---------------- #
 @app.route("/")
 def index():
-    return "Price tracker is running ✅"
+    return """
+    <h1>🌸 Price Tracker</h1>
+
+    <form action="/add" method="get">
+        <input
+            type="text"
+            name="url"
+            placeholder="Paste product URL here..."
+            style="width:500px;height:35px;"
+            required
+        >
+
+        <button style="height:40px;" type="submit">
+            Start tracking
+        </button>
+    </form>
+    """
 
 
 @app.route("/run")
