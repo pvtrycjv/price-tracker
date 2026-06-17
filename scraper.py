@@ -21,12 +21,8 @@ def get_connection():
 
 # ---------------- HELPERS ---------------- #
 def clean_url(url):
-    return url.split("?")[0]
-
-
-def extract_product_id(url):
-    return url.rstrip("/").split("/")[-1]
-
+    return url.split("?")[0]
+
 
 # ---------------- EMAIL ---------------- #
  
@@ -40,7 +36,7 @@ def send_email(product_name, old_price, new_price, url):
     )
 
     # -------- STATS -------- #
-    stats = get_price_stats(extract_product_id(url))
+    stats = get_price_stats(url)
 
     if stats and stats["min"] is not None:
         stats_text = (
@@ -118,13 +114,13 @@ def init_db():
     conn.close()
 
 
-def get_saved_price(product_id):
+def get_saved_price(url):
     conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute(
-        "SELECT last_price FROM products WHERE product_id = %s",
-        (product_id,)
+        "SELECT last_price FROM products WHERE url = %s",
+        (url,)
     )
 
     row = cursor.fetchone()
@@ -132,16 +128,16 @@ def get_saved_price(product_id):
     return row[0] if row else None
 
 
-def update_price(product_id, url, price):
+def update_price(url, price):
     conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute("""
-        INSERT INTO products (product_id, url, last_price)
-        VALUES (%s, %s, %s)
-        ON CONFLICT (product_id)
+        INSERT INTO products (url, last_price)
+        VALUES (%s, %s)
+        ON CONFLICT (url)
         DO UPDATE SET last_price = EXCLUDED.last_price
-    """, (product_id, url, price))
+    """, (url, price))
 
     conn.commit()
     conn.close()
@@ -151,7 +147,7 @@ def get_all_products():
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT product_id, url FROM products")
+    cursor.execute("SELECT url, last_price FROM products")
     rows = cursor.fetchall()
 
     conn.close()
@@ -170,7 +166,7 @@ def get_all_tracked_products():
 
 # ---------------- SCRAPER ---------------- #
 
-def check_price(product_id, url, page):
+def check_price(url, page):
     try:
         print("\n--- Checking product ---")
         print("URL:", url)
@@ -267,7 +263,7 @@ def check_price(product_id, url, page):
             print("❌ Price not found")
             return
 
-        print(f"{product_id} -> {price} PLN")
+        print(f"{url} -> {price} PLN")
 
         # =====================================================
         # DATABASE + EMAIL
@@ -289,7 +285,7 @@ def check_price(product_id, url, page):
         print(f"❌ ERROR for {product_id}: {e}")
         
  
-def save_price_history(product_id, price):
+def save_price_history(url, price):
     conn = get_connection()
     cursor = conn.cursor()
 
@@ -299,19 +295,19 @@ def save_price_history(product_id, price):
         WHERE product_id = %s
         ORDER BY checked_at DESC
         LIMIT 1
-    """, (product_id,))
+    """, (url,))
 
     last = cursor.fetchone()
 
-    # only save if changed
     if last is None or abs(last[0] - price) > 0.01:
         cursor.execute("""
             INSERT INTO price_history (product_id, price)
             VALUES (%s, %s)
-        """, (product_id, price))
+        """, (url, price))
 
     conn.commit()
     conn.close()
+
 
 
 def get_price_stats(product_id):
@@ -471,8 +467,8 @@ if __name__ == "__main__":
                 page = context.new_page()
                 page.set_default_timeout(30000)
 
-                for product_id, url in products:
-                    check_price(product_id, url, page)
+                for url, last_price in products:
+                    check_price(url, url, page)
                     time.sleep(3)
 
                 browser.close()
