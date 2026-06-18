@@ -269,7 +269,7 @@ def check_price(url, page):
         # DATABASE + EMAIL
         # =====================================================
 
-        old_price = get_saved_price(product_id)
+        old_price = get_saved_price(url)
 
         if old_price is None:
             print("First run, saving price.")
@@ -278,11 +278,11 @@ def check_price(url, page):
             print("🚨 PRICE DROPPED!")
             send_email(name, old_price, price, url)
 
-        update_price(product_id, url, price)
-        save_price_history(product_id, price)
+        update_price(url, price)
+        save_price_history(url, price)
 
     except Exception as e:
-        print(f"❌ ERROR for {product_id}: {e}")
+        print(f"❌ ERROR for {url}: {e}")
         
  
 def save_price_history(url, price):
@@ -383,9 +383,9 @@ def run_scraper():
 
         page = context.new_page()
 
-        for product_id, url in products:
-            check_price(product_id, url, page)
-            time.sleep(3)  # important: slow down
+        for url, last_price in products:
+            check_price(url, page)
+            time.sleep(3)  
 
         browser.close()
 
@@ -399,22 +399,21 @@ def add_from_url():
     if not url:
         return "Use /add?url=PRODUCT_URL"
 
-    clean = clean_url(url)
-    product_id = extract_product_id(clean)
+    clean = clean_url(url)
 
     conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute("""
-        INSERT INTO products (product_id, url, last_price)
-        VALUES (%s, %s, %s)
-        ON CONFLICT (product_id) DO NOTHING
-    """, (product_id, clean, None))
+        INSERT INTO products (url, last_price)
+        VALUES (%s, %s)
+        ON CONFLICT (url) DO NOTHING
+    """, (clean, None))
 
     conn.commit()
     conn.close()
 
-    return f"Added: {product_id}"
+    return f"Added: {clean}"
 
 
 @app.route("/delete")
@@ -430,8 +429,8 @@ def delete_product():
     )
 
     cursor.execute(
-        "DELETE FROM price_history WHERE product_id = %s",
-        (extract_product_id(url),)
+        "DELETE FROM price_history WHERE url = %s",
+        (url,)
     )
 
     conn.commit()
@@ -468,7 +467,7 @@ if __name__ == "__main__":
                 page.set_default_timeout(30000)
 
                 for url, last_price in products:
-                    check_price(url, url, page)
+                    check_price(url, page)
                     time.sleep(3)
 
                 browser.close()
