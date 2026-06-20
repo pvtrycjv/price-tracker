@@ -66,16 +66,17 @@ Product: {product_name}
 Old Price: {old_price} PLN
 New Price: {new_price} PLN
 
---- Stats ---
+
+[📈] Stats
 {stats_text}
 
---- All tracked products ---
+[🛒] All tracked products
 {product_summary}
 
-Link:
+[🔗] Link:
 {url}
 
-Stop tracking:
+[🗑] Stop tracking:
 {delete_url}
 """)
 
