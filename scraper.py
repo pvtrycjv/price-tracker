@@ -5,6 +5,8 @@ import psycopg2
 from flask import Flask, request, redirect
 from email.message import EmailMessage
 from playwright.sync_api import sync_playwright
+import re
+
 
 # ---------------- APP ---------------- #
 app = Flask(__name__)
@@ -26,9 +28,10 @@ def clean_url(url):
 
 # ---------------- EMAIL ---------------- #
  
- 
 def send_email(product_name, old_price, new_price, url):
     from urllib.parse import quote
+    import html
+    safe_product_name = html.escape(product_name)
 
     delete_url = (
         "https://price-tracker-rqi7.onrender.com/delete?url="
@@ -39,6 +42,11 @@ def send_email(product_name, old_price, new_price, url):
     stats = get_price_stats(url)
 
     if stats and stats["min"] is not None:
+        min_p = stats["min"] if stats["min"] is not None else "-"
+        max_p = stats["max"] if stats["max"] is not None else "-"
+        avg_p = stats["avg"] if stats["avg"] is not None else "-"
+
+        
         stats_text = (
             f"Min: {stats['min']} PLN\n"
             f"Max: {stats['max']} PLN\n"
@@ -50,15 +58,27 @@ def send_email(product_name, old_price, new_price, url):
     # -------- ALL PRODUCTS -------- #
     products = get_all_tracked_products()
 
-    product_summary = "\n".join(
-        [f"- {purl} → {price} PLN" for purl, price in products]
-    )
+    product_summary_html = ""
+    product_summary_text = ""
 
+    for name, purl, price in products:
+        safe_name = html.escape(name if name else "Unknown")
+
+        product_summary_html += (
+            f'<li><a href="{purl}">{safe_name}</a> → {price} PLN</li>'
+        )
+
+        product_summary_text += (
+            f"- {safe_name} → {purl} → {price} PLN\n"
+        )
+
+    # -------- EMAIL -------- #
     msg = EmailMessage()
     msg["Subject"] = f"🌸 Price Dropped: {product_name}"
     msg["From"] = EMAIL
     msg["To"] = EMAIL
 
+    # plain text version
     msg.set_content(f"""
 Price dropped!
 
@@ -66,25 +86,59 @@ Product: {product_name}
 Old Price: {old_price} PLN
 New Price: {new_price} PLN
 
-
-[📈] Stats
+--- Stats ---
 {stats_text}
 
-[🛒] All tracked products
-{product_summary}
+--- All tracked products ---
+{product_summary_text}
 
-[🔗] Link:
+Link:
 {url}
 
-[🗑] Stop tracking:
+Stop tracking:
 {delete_url}
 """)
+
+    # HTML version
+    msg.add_alternative(f"""
+    <html>
+    <body>
+
+    <h2>🌸 Price Dropped!</h2>
+
+    <p>
+        <b>{safe_product_name}</b><br>
+        Old price: {old_price} PLN<br>
+        New price: {new_price} PLN
+    </p>
+
+    <h3>📈 Stats</h3>
+    <p style="white-space:pre-line;">{stats_text}</p>
+
+    <h3>🛒 All tracked products</h3>
+    <ul>
+        {product_summary_html}
+    </ul>
+
+    <p>
+        <a href="{url}">🔗 Open product</a>
+    </p>
+
+    <p>
+        <a href="{delete_url}">🗑 Stop tracking</a>
+    </p>
+
+    </body>
+    </html>
+    """, subtype="html")
 
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
         server.login(EMAIL, APP_PASSWORD)
         server.send_message(msg)
 
-    print("📩 Email sent!")
+    print("📩 Email sent!") 
+
+       
 
 
 # ---------------- DATABASE ---------------- #
@@ -95,8 +149,8 @@ def init_db():
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS products (
         id SERIAL PRIMARY KEY,
-        product_id TEXT UNIQUE,
-        url TEXT,
+        name TEXT,
+        url TEXT UNIQUE,
         last_price FLOAT
     )
     """)
@@ -129,16 +183,18 @@ def get_saved_price(url):
     return row[0] if row else None
 
 
-def update_price(url, price):
+def update_price(url, name, price):
     conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute("""
-        INSERT INTO products (url, last_price)
-        VALUES (%s, %s)
+        INSERT INTO products (name, url, last_price)
+        VALUES (%s, %s, %s)
         ON CONFLICT (url)
-        DO UPDATE SET last_price = EXCLUDED.last_price
-    """, (url, price))
+        DO UPDATE SET
+            name = EXCLUDED.name,
+            last_price = EXCLUDED.last_price
+""", (name, url, price))
 
     conn.commit()
     conn.close()
@@ -158,7 +214,7 @@ def get_all_tracked_products():
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT url, last_price FROM products")
+    cursor.execute("SELECT name, url, last_price FROM products")
     rows = cursor.fetchall()
 
     conn.close()
@@ -279,7 +335,7 @@ def check_price(url, page):
             print("🚨 PRICE DROPPED!")
             send_email(name, old_price, price, url)
 
-        update_price(url, price)
+        update_price(url, name, price)
         save_price_history(url, price)
 
     except Exception as e:
@@ -430,7 +486,7 @@ def delete_product():
     )
 
     cursor.execute(
-        "DELETE FROM price_history WHERE url = %s",
+        "DELETE FROM price_history WHERE product_id = %s",
         (url,)
     )
 
