@@ -330,12 +330,18 @@ def check_price(url, page):
 
         if old_price is None:
             print("First run, saving price.")
+            update_price(url, name, price)
 
         elif price < old_price * 0.99:
             print("🚨 PRICE DROPPED!")
+
+            update_price(url, name, price)
+
             send_email(name, old_price, price, url)
 
-        update_price(url, name, price)
+        else:
+            update_price(url, name, price)
+
         save_price_history(url, price)
 
     except Exception as e:
