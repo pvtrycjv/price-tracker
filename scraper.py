@@ -123,7 +123,7 @@ Stop tracking:
 
     <p>
         <a href="{url}"
-        style="display:inline-block;padding:10px 18px;background:#2196F3;color:white;text-decoration:none;border-radius:6px;">
+           style="display:inline-block;padding:10px 18px;background:#2196F3;color:white;text-decoration:none;border-radius:6px;">
            🔗 Open product
         </a>
 
