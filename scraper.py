@@ -102,6 +102,7 @@ Stop tracking:
     # HTML version
     msg.add_alternative(f"""
     <html>
+
     <body>
 
     <h2>🌸 Price Dropped!</h2>
@@ -121,11 +122,24 @@ Stop tracking:
     </ul>
 
     <p>
-        <a href="{url}">🔗 Open product</a>
+        <a href="{url}"
+        style="display:inline-block;padding:10px 18px;background:#2196F3;color:white;text-decoration:none;border-radius:6px;">
+           🔗 Open product
+        </a>
+
+        &nbsp;
+
+        <a href="https://price-tracker-rqi7.onrender.com/"
+           style="display:inline-block;padding:10px 18px;background:#4CAF50;color:white;text-decoration:none;border-radius:6px;">
+       ➕ Add product
+        </a>
     </p>
 
     <p>
-        <a href="{delete_url}">🗑 Stop tracking</a>
+        <a href="{delete_url}"
+           style="display:inline-block;padding:10px 18px;background:#f44336;color:white;text-decoration:none;border-radius:6px;">
+           🗑 Stop tracking
+        </a>
     </p>
 
     </body>
