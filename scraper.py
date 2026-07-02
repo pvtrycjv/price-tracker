@@ -131,7 +131,7 @@ Stop tracking:
 
         <a href="https://price-tracker-rqi7.onrender.com/"
            style="display:inline-block;padding:10px 18px;background:#4CAF50;color:white;text-decoration:none;border-radius:6px;">
-       ➕ Add product
+           ➕ Add product
         </a>
     </p>
 
