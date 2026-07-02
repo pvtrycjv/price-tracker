@@ -123,21 +123,21 @@ Stop tracking:
 
     <p>
         <a href="{url}"
-           style="display:inline-block;padding:10px 18px;background:#eddbdd;color:white;text-decoration:none;border-radius:6px;">
+           style="display:inline-block;padding:10px 18px;background:#eddbdd;color:black;text-decoration:none;border-radius:6px;">
            🔗 Open link
         </a>
 
         &nbsp;
 
         <a href="https://price-tracker-rqi7.onrender.com/"
-           style="display:inline-block;padding:10px 18px;background:#eddbdd;color:white;text-decoration:none;border-radius:6px;">
+           style="display:inline-block;padding:10px 18px;background:#eddbdd;color:black;text-decoration:none;border-radius:6px;">
            ➕ Add product
         </a>
     </p>
 
     <p>
         <a href="{delete_url}"
-           style="display:inline-block;padding:10px 18px;background:#eddbdd;color:white;text-decoration:none;border-radius:6px;">
+           style="display:inline-block;padding:10px 18px;background:#eddbdd;color:black;text-decoration:none;border-radius:6px;">
            🗑 Stop tracking
         </a>
     </p>
