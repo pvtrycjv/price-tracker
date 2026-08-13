@@ -269,18 +269,35 @@ def check_price(url, page):
         # PRICE LOGIC (RESTORED SIMPLE VERSION)
         # =====================================================
 
+
+
         price = None
 
+        # -------- META PRICE FALLBACK -------- #
+        try:
+            meta_price = page.query_selector('meta[property="product:price:amount"]')
+
+            if meta_price:
+                meta_price_value = meta_price.get_attribute("content")
+
+                if meta_price_value:
+                    price = float(meta_price_value)
+                    print("Meta price used:", price)
+
+        except Exception as e:
+            print("Could not get meta price:", e)
+
         # -------- FORMAT 1 (CENEO SIMPLE) -------- #
-        whole = page.query_selector(".price-format__whole")
-        fraction = page.query_selector(".price-format__fraction")
+        if price is None:
+            whole = page.query_selector(".price-format__whole")
+            fraction = page.query_selector(".price-format__fraction")
 
-        if whole:
-            w = whole.inner_text().strip()
-            f = fraction.inner_text().strip() if fraction else "00"
+            if whole:
+                w = whole.inner_text().strip()
+                f = fraction.inner_text().strip() if fraction else "00"
 
-            if w and w.replace(".", "").isdigit():
-                price = float(f"{w}.{f}")
+                if w and w.replace(".", "").isdigit():
+                    price = float(f"{w}.{f}")
 
         # -------- FORMAT 2 -------- #
         if price is None:
