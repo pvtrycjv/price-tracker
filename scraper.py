@@ -250,7 +250,7 @@ def check_price(url, page):
 
         page.wait_for_timeout(3000)
 
-
+        
         # -------- PRODUCT NAME -------- #
         name = "Unknown product"
 
@@ -261,13 +261,12 @@ def check_price(url, page):
             if og_title:
                 content = og_title.get_attribute("content")
 
-                 if content:
+                if content:
                     name = content.strip()
                     print("NAME FROM OG:TITLE:", name)
 
         except Exception as e:
             print("Could not get og:title:", e)
-
 
         # If og:title wasn't found, fall back to <h1>
         if name == "Unknown product":
