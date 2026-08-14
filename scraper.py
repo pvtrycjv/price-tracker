@@ -283,11 +283,10 @@ def check_price(url, page):
             except Exception as e:
                 print("Could not get product name from h1:", e)
 
-        print("NAME:", name) =====================================================
+        print("NAME:", name) 
+
         # PRICE LOGIC (RESTORED SIMPLE VERSION)
-        # =====================================================
-
-
+        
 
         price = None
 
