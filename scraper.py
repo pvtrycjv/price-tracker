@@ -250,22 +250,41 @@ def check_price(url, page):
 
         page.wait_for_timeout(3000)
 
+
         # -------- PRODUCT NAME -------- #
         name = "Unknown product"
 
+        # Try Open Graph title first
         try:
-            page.wait_for_selector("h1", timeout=5000)
-            title_el = page.query_selector("h1")
+            og_title = page.query_selector('meta[property="og:title"]')
 
-            if title_el:
-                name = title_el.inner_text().strip()
+            if og_title:
+                content = og_title.get_attribute("content")
+
+                 if content:
+                    name = content.strip()
+                    print("NAME FROM OG:TITLE:", name)
 
         except Exception as e:
-            print("Could not get product name:", e)
+            print("Could not get og:title:", e)
 
-        print("NAME:", name)
 
-        # =====================================================
+        # If og:title wasn't found, fall back to <h1>
+        if name == "Unknown product":
+            try:
+                page.wait_for_selector("h1", timeout=5000)
+                title_el = page.query_selector("h1")
+
+                if title_el:
+                    h1_name = title_el.inner_text().strip()
+
+                    if h1_name:
+                        name = h1_name
+
+            except Exception as e:
+                print("Could not get product name from h1:", e)
+
+        print("NAME:", name) =====================================================
         # PRICE LOGIC (RESTORED SIMPLE VERSION)
         # =====================================================
 
