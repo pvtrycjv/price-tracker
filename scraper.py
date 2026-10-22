@@ -64,13 +64,29 @@ def send_email(product_name, old_price, new_price, url):
     for name, purl, price in products:
         safe_name = html.escape(name if name else "Unknown")
 
-        product_summary_html += (
-            f'<li><a href="{purl}">{safe_name}</a> → {price} PLN</li>'
+        from urllib.parse import quote
+
+        stop_tracking_url = (
+            "https://price-tracker-rqi7.onrender.com/delete?url="
+            + quote(purl, safe="")
         )
 
-        product_summary_text += (
-            f"- {safe_name} → {purl} → {price} PLN\n"
+        product_summary_html += (
+            f'<li>'
+            f'<a href="{purl}">{safe_name}</a> → {price} PLN '
+            f'<a href="{stop_tracking_url}" '
+            f'style="color:#d9534f;text-decoration:none;font-weight:bold;" '
+            f'title="Stop tracking this product">[x]</a>'
+            f'</li>'
         )
+
+
+        product_summary_text += (
+            f"- {name if name else 'Unknown'} → {purl} → {price} PLN\n"
+            f"  Stop tracking: {stop_tracking_url}\n"
+        )
+
+
 
     # -------- EMAIL -------- #
     msg = EmailMessage()
