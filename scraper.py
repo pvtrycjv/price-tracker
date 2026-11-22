@@ -797,6 +797,19 @@ def delete_product():
 
 
 # ---------------- MAIN ---------------- #
+
+def cleanup_old_history():
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        DELETE FROM price_history
+        WHERE checked_at < NOW() - INTERVAL '60 days'
+    """)
+
+    conn.commit()
+    conn.close()
+
 if __name__ == "__main__":
     init_db()
     cleanup_old_history()
