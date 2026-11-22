@@ -251,10 +251,14 @@ def get_all_tracked_products():
     return rows
 
 
+
 # ---------------- SCRAPER ---------------- #
 
 def check_price(url, page):
     try:
+        import re
+        import json
+
         print("\n--- Checking product ---")
         print("URL:", url)
 
@@ -266,125 +270,399 @@ def check_price(url, page):
 
         page.wait_for_timeout(3000)
 
-        
-        # -------- PRODUCT NAME -------- #
+        # =====================================================
+        # HELPER: CLEAN AND CONVERT PRICE TO FLOAT
+        # =====================================================
+
+        def parse_price(text):
+            if not text:
+                return None
+
+            text = str(text).strip()
+
+            # Remove currency and unnecessary characters
+            text = (
+                text.replace("zł", "")
+                    .replace("PLN", "")
+                    .replace("pln", "")
+                    .replace("\xa0", "")
+                    .replace(" ", "")
+                    .replace(",", ".")
+            )
+
+            # Keep only numbers and decimal points
+            text = re.sub(r"[^\d.]", "", text)
+
+            try:
+                return float(text)
+            except ValueError:
+                return None
+
+        # =====================================================
+        # PRODUCT NAME
+        # =====================================================
+
         name = "Unknown product"
 
-        # Try Open Graph title first
+        # 1. Open Graph title
         try:
-            og_title = page.query_selector('meta[property="og:title"]')
+            og_title = page.query_selector(
+                'meta[property="og:title"]'
+            )
 
             if og_title:
                 content = og_title.get_attribute("content")
 
-                if content:
+                if content and content.strip():
                     name = content.strip()
                     print("NAME FROM OG:TITLE:", name)
 
         except Exception as e:
-            print("Could not get og:title:", e)
+            print("OG title error:", e)
 
-        # If og:title wasn't found, fall back to <h1>
+        # 2. H1
         if name == "Unknown product":
             try:
-                page.wait_for_selector("h1", timeout=5000)
-                title_el = page.query_selector("h1")
+                h1 = page.query_selector("h1")
 
-                if title_el:
-                    h1_name = title_el.inner_text().strip()
+                if h1:
+                    h1_text = h1.inner_text().strip()
 
-                    if h1_name:
-                        name = h1_name
+                    if h1_text:
+                        name = h1_text
+                        print("NAME FROM H1:", name)
 
             except Exception as e:
-                print("Could not get product name from h1:", e)
+                print("H1 error:", e)
 
-        print("NAME:", name) 
+        # 3. Meta title
+        if name == "Unknown product":
+            try:
+                meta_title = page.query_selector(
+                    'meta[name="title"]'
+                )
 
-        # PRICE LOGIC (RESTORED SIMPLE VERSION)
-        
+                if meta_title:
+                    content = meta_title.get_attribute("content")
+
+                    if content:
+                        name = content.strip()
+                        print("NAME FROM META TITLE:", name)
+
+            except Exception as e:
+                print("Meta title error:", e)
+
+        # 4. JSON-LD product name
+        if name == "Unknown product":
+            try:
+                scripts = page.query_selector_all(
+                    'script[type="application/ld+json"]'
+                )
+
+                for script in scripts:
+                    content = script.inner_text()
+
+                    if not content:
+                        continue
+
+                    data = json.loads(content)
+
+                    def find_product_name(obj):
+                        if isinstance(obj, dict):
+
+                            if (
+                                obj.get("@type") == "Product"
+                                and obj.get("name")
+                            ):
+                                return obj["name"]
+
+                            for value in obj.values():
+                                result = find_product_name(value)
+
+                                if result:
+                                    return result
+
+                        elif isinstance(obj, list):
+
+                            for item in obj:
+                                result = find_product_name(item)
+
+                                if result:
+                                    return result
+
+                        return None
+
+                    json_name = find_product_name(data)
+
+                    if json_name:
+                        name = json_name.strip()
+                        print("NAME FROM JSON-LD:", name)
+                        break
+
+            except Exception as e:
+                print("JSON-LD name error:", e)
+
+        print("FINAL NAME:", name)
+
+        # =====================================================
+        # PRICE EXTRACTION
+        # =====================================================
 
         price = None
 
-        # -------- META PRICE FALLBACK -------- #
-        try:
-            meta_price = page.query_selector('meta[property="product:price:amount"]')
+        # =====================================================
+        # 1. VISIBLE PRICE SELECTORS
+        # =====================================================
 
-            if meta_price:
-                meta_price_value = meta_price.get_attribute("content")
+        price_selectors = [
+            '[data-testid="price"]',
+            '[data-testid="product-price"]',
+            '[data-testid="price-current"]',
+            '[itemprop="price"]',
+            '.price',
+            '.product-price',
+            '.current-price',
+            '.sales-price',
+            '.special-price'
+        ]
 
-                if meta_price_value:
-                    price = float(meta_price_value)
-                    print("Meta price used:", price)
+        print("\n--- PRICE SEARCH ---")
 
-        except Exception as e:
-            print("Could not get meta price:", e)
+        for selector in price_selectors:
 
-        # -------- FORMAT 1 (CENEO SIMPLE) -------- #
-        if price is None:
-            whole = page.query_selector(".price-format__whole")
-            fraction = page.query_selector(".price-format__fraction")
+            try:
+                elements = page.query_selector_all(selector)
 
-            if whole:
-                w = whole.inner_text().strip()
-                f = fraction.inner_text().strip() if fraction else "00"
+                for element in elements:
 
-                if w and w.replace(".", "").isdigit():
-                    price = float(f"{w}.{f}")
+                    if not element.is_visible():
+                        continue
 
-        # -------- FORMAT 2 -------- #
-        if price is None:
-            value = page.query_selector(".value")
-            penny = page.query_selector(".penny")
+                    text = element.inner_text().strip()
 
-            if value:
-                v = value.inner_text().strip()
-                p = penny.inner_text().replace(",", "").strip() if penny else "00"
+                    if not text:
+                        continue
 
-                if v.isdigit():
-                    price = float(f"{v}.{p}")
+                    candidate = parse_price(text)
 
-        # -------- FORMAT 3 -------- #
-        if price is None:
-            alt = page.query_selector(".price")
+                    if candidate is not None and candidate > 0:
 
-            if alt:
-                text = alt.inner_text().strip()
+                        print(
+                            "PRICE CANDIDATE:",
+                            selector,
+                            "->",
+                            text,
+                            "->",
+                            candidate
+                        )
 
-                if text:
-                    text = (
-                        text.replace("zł", "")
-                            .replace(",", ".")
-                            .replace(" ", "")
-                    )
+                        # Avoid accepting tiny values like
+                        # "5" from a price fragment or quantity
+                        if candidate >= 1:
 
-                    try:
-                        price = float(text)
-                    except:
-                        print("Invalid format3")
+                            price = candidate
 
-        # -------- FORMAT 4 (fallback) -------- #
-        if price is None:
-            import re
+                            print(
+                                "PRICE FROM VISIBLE SELECTOR:",
+                                selector,
+                                price
+                            )
 
-            body_text = page.inner_text("body")
+                            break
 
-            match = re.search(r"(\d+[.,]\d+)\s*zł", body_text)
+                if price is not None:
+                    break
 
-            if match:
-                price = float(match.group(1).replace(",", "."))
-
-                print("Fallback regex used")
+            except Exception as e:
+                print("Selector error:", selector, e)
 
         # =====================================================
-        # FINAL CHECK
+        # 2. JSON-LD PRODUCT PRICE
         # =====================================================
 
         if price is None:
-            print("❌ Price not found")
+
+            try:
+
+                scripts = page.query_selector_all(
+                    'script[type="application/ld+json"]'
+                )
+
+                for script in scripts:
+
+                    content = script.inner_text()
+
+                    if not content:
+                        continue
+
+                    data = json.loads(content)
+
+                    def find_product_price(obj):
+
+                        if isinstance(obj, dict):
+
+                            obj_type = obj.get("@type")
+
+                            if (
+                                obj_type == "Product"
+                                or (
+                                    isinstance(obj_type, list)
+                                    and "Product" in obj_type
+                                )
+                            ):
+
+                                offers = obj.get("offers")
+
+                                if isinstance(offers, dict):
+
+                                    value = offers.get("price")
+
+                                    if value:
+                                        return value
+
+                                    price_spec = offers.get(
+                                        "priceSpecification"
+                                    )
+
+                                    if isinstance(price_spec, dict):
+                                        return price_spec.get("price")
+
+                                elif isinstance(offers, list):
+
+                                    for offer in offers:
+
+                                        if isinstance(offer, dict):
+                                            value = offer.get("price")
+
+                                            if value:
+                                                return value
+
+                            for value in obj.values():
+
+                                result = find_product_price(value)
+
+                                if result is not None:
+                                    return result
+
+                        elif isinstance(obj, list):
+
+                            for item in obj:
+
+                                result = find_product_price(item)
+
+                                if result is not None:
+                                    return result
+
+                        return None
+
+                    json_price = find_product_price(data)
+
+                    if json_price is not None:
+
+                        candidate = parse_price(json_price)
+
+                        if candidate is not None:
+
+                            price = candidate
+
+                            print(
+                                "PRICE FROM JSON-LD:",
+                                price
+                            )
+
+                            break
+
+            except Exception as e:
+                print("JSON-LD price error:", e)
+
+        # =====================================================
+        # 3. META PRICE
+        # =====================================================
+
+        if price is None:
+
+            meta_selectors = [
+                'meta[property="product:price:amount"]',
+                'meta[property="og:price:amount"]',
+                'meta[name="twitter:data1"]'
+            ]
+
+            for selector in meta_selectors:
+
+                try:
+
+                    meta = page.query_selector(selector)
+
+                    if meta:
+
+                        content = meta.get_attribute("content")
+
+                        candidate = parse_price(content)
+
+                        if candidate is not None:
+
+                            price = candidate
+
+                            print(
+                                "PRICE FROM META:",
+                                selector,
+                                price
+                            )
+
+                            break
+
+                except Exception as e:
+                    print("Meta price error:", e)
+
+        # =====================================================
+        # 4. PAGE TEXT FALLBACK
+        # =====================================================
+
+        if price is None:
+
+            try:
+
+                body_text = page.locator("body").inner_text()
+
+                # Find prices followed by PLN or zł
+                matches = re.findall(
+                    r"(\d[\d\s\xa0]*[.,]\d{2})\s*(?:zł|PLN)",
+                    body_text,
+                    re.IGNORECASE
+                )
+
+                print("BODY PRICE MATCHES:", matches)
+
+                if matches:
+
+                    # Usually the first price is the main product
+                    candidate = parse_price(matches[0])
+
+                    if candidate is not None:
+
+                        price = candidate
+
+                        print(
+                            "PRICE FROM BODY TEXT:",
+                            price
+                        )
+
+            except Exception as e:
+                print("Body price error:", e)
+
+        # =====================================================
+        # 5. FINAL CHECK
+        # =====================================================
+
+        if price is None:
+
+            print("❌ PRICE NOT FOUND")
             return
 
-        print(f"{url} -> {price} PLN")
+        print("\n==============================")
+        print("FINAL PRODUCT:", name)
+        print("FINAL PRICE:", price, "PLN")
+        print("==============================\n")
 
         # =====================================================
         # DATABASE + EMAIL
@@ -393,84 +671,36 @@ def check_price(url, page):
         old_price = get_saved_price(url)
 
         if old_price is None:
+
             print("First run, saving price.")
+
             update_price(url, name, price)
 
         elif price < old_price * 0.99:
+
             print("🚨 PRICE DROPPED!")
 
             update_price(url, name, price)
 
-            send_email(name, old_price, price, url)
+            send_email(
+                name,
+                old_price,
+                price,
+                url
+            )
 
         else:
+
             update_price(url, name, price)
 
         save_price_history(url, price)
 
     except Exception as e:
+
         print(f"❌ ERROR for {url}: {e}")
-        
- 
-def save_price_history(url, price):
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        SELECT price
-        FROM price_history
-        WHERE product_id = %s
-        ORDER BY checked_at DESC
-        LIMIT 1
-    """, (url,))
-
-    last = cursor.fetchone()
-
-    if last is None or abs(last[0] - price) > 0.01:
-        cursor.execute("""
-            INSERT INTO price_history (product_id, price)
-            VALUES (%s, %s)
-        """, (url, price))
-
-    conn.commit()
-    conn.close()
-
-
-
-def get_price_stats(product_id):
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        SELECT
-            MIN(price),
-            MAX(price),
-            AVG(price)
-        FROM price_history
-        WHERE product_id = %s
-    """, (product_id,))
-
-    stats = cursor.fetchone()
-    conn.close()
-
-    return {
-        "min": stats[0],
-        "max": stats[1],
-        "avg": round(stats[2], 2) if stats[2] else None
-    }
-    
-def cleanup_old_history():
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        DELETE FROM price_history
-        WHERE checked_at < NOW() - INTERVAL '60 days'
-    """)
-
-    conn.commit()
-    conn.close()
-
+                 
+            
+            
 # ---------------- FLASK ROUTES ---------------- #
 @app.route("/")
 def index():
