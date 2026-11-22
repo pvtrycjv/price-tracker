@@ -262,35 +262,13 @@ def check_price(url, page):
         print("\n--- Checking product ---")
         print("URL:", url)
 
-        response = page.goto(
+        page.goto(
             url,
-            timeout=60000,
+            timeout=30000,
             wait_until="domcontentloaded"
         )
 
-        print("\n--- ZALANDO DEBUG ---")
-
-        if response:
-            print("HTTP STATUS:", response.status)
-        else:
-            print("NO RESPONSE RECEIVED")
-
-        print("FINAL URL:", page.url)
-        print("PAGE TITLE:", page.title())
-
-        page.wait_for_timeout(8000)
-
-        try:
-            body = page.locator("body").inner_text(timeout=10000)
-
-            print("BODY LENGTH:", len(body))
-            print("BODY PREVIEW:")
-            print(body[:2000])
-
-        except Exception as e:
-            print("BODY ERROR:", e)
-
-        print("--- END DEBUG ---\n")
+        page.wait_for_timeout(3000)
 
 
         # =====================================================
