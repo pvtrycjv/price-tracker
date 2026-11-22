@@ -798,6 +798,60 @@ def delete_product():
 
 # ---------------- MAIN ---------------- #
 
+# ---------------- PRICE HISTORY ---------------- #
+
+def save_price_history(url, price):
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT price
+        FROM price_history
+        WHERE product_id = %s
+        ORDER BY checked_at DESC
+        LIMIT 1
+    """, (url,))
+
+    last = cursor.fetchone()
+
+    if last is None or abs(last[0] - price) > 0.01:
+
+        cursor.execute("""
+            INSERT INTO price_history (product_id, price)
+            VALUES (%s, %s)
+        """, (url, price))
+
+    conn.commit()
+    conn.close()
+
+
+# ---------------- PRICE STATISTICS ---------------- #
+
+def get_price_stats(product_id):
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT
+            MIN(price),
+            MAX(price),
+            AVG(price)
+        FROM price_history
+        WHERE product_id = %s
+    """, (product_id,))
+
+    stats = cursor.fetchone()
+    conn.close()
+
+    return {
+        "min": stats[0],
+        "max": stats[1],
+        "avg": round(stats[2], 2) if stats[2] else None
+    }
+
+
+# ---------------- CLEANUP OLD HISTORY ---------------- #
+
 def cleanup_old_history():
     conn = get_connection()
     cursor = conn.cursor()
@@ -809,6 +863,8 @@ def cleanup_old_history():
 
     conn.commit()
     conn.close()
+
+
 
 if __name__ == "__main__":
     init_db()
